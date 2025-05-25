@@ -1,6 +1,8 @@
 services:
   mc:
     image: itzg/minecraft-server
+    env_file:
+      - .env.docker
     environment:
       EULA: true
       TYPE: ${TYPE}
