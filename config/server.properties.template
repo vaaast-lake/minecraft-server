@@ -1,0 +1,119 @@
+#Minecraft server properties - TEMPLATE
+#Use with environment variables or override files
+
+# ========================================
+# AUTHENTICATION AND SECURITY
+# ========================================
+online-mode=${ONLINE_MODE:-true}
+enforce-secure-profile=${ENFORCE_SECURE_PROFILE:-true}
+prevent-proxy-connections=${PREVENT_PROXY_CONNECTIONS:-false}
+
+# ========================================
+# WORLD CREATION AND MANAGEMENT
+# ========================================
+level-name=${LEVEL_NAME:-world}
+level-seed=${LEVEL_SEED:-}
+level-type=${LEVEL_TYPE:-minecraft\\:normal}
+generate-structures=${GENERATE_STRUCTURES:-true}
+
+# ========================================
+# PLAYER MANAGEMENT
+# ========================================
+max-players=${MAX_PLAYERS:-20}
+player-idle-timeout=${PLAYER_IDLE_TIMEOUT:-0}
+white-list=${WHITE_LIST:-false}
+enforce-whitelist=${ENFORCE_WHITELIST:-false}
+
+# ========================================
+# GAME PLAY SETTINGS
+# ========================================
+gamemode=${GAMEMODE:-survival}
+force-gamemode=${FORCE_GAMEMODE:-false}
+difficulty=${DIFFICULTY:-easy}
+hardcore=${HARDCORE:-false}
+pvp=${PVP:-true}
+spawn-protection=${SPAWN_PROTECTION:-16}
+spawn-monsters=${SPAWN_MONSTERS:-true}
+
+# ========================================
+# ADVANCED GAMEPLAY
+# ========================================
+accepts-transfers=${ACCEPTS_TRANSFERS:-false}
+allow-flight=${ALLOW_FLIGHT:-false}
+allow-nether=${ALLOW_NETHER:-true}
+entity-broadcast-range-percentage=${ENTITY_BROADCAST_RANGE_PERCENTAGE:-100}
+function-permission-level=${FUNCTION_PERMISSION_LEVEL:-2}
+generator-settings=${GENERATOR_SETTINGS:-{}}
+
+# ========================================
+# NETWORK CONFIGURATION
+# ========================================
+server-ip=${SERVER_IP:-}
+server-port=${SERVER_PORT:-25565}
+network-compression-threshold=${NETWORK_COMPRESSION_THRESHOLD:-256}
+query.port=${QUERY_PORT:-25565}
+
+# ========================================
+# SERVER PERFORMANCE
+# ========================================
+view-distance=${VIEW_DISTANCE:-10}
+simulation-distance=${SIMULATION_DISTANCE:-10}
+max-tick-time=${MAX_TICK_TIME:-60000}
+max-world-size=${MAX_WORLD_SIZE:-29999984}
+
+# ========================================
+# SERVER OPTIMIZATION
+# ========================================
+max-chained-neighbor-updates=${MAX_CHAINED_NEIGHBOR_UPDATES:-1000000}
+sync-chunk-writes=${SYNC_CHUNK_WRITES:-true}
+use-native-transport=${USE_NATIVE_TRANSPORT:-true}
+region-file-compression=${REGION_FILE_COMPRESSION:-deflate}
+pause-when-empty-seconds=${PAUSE_WHEN_EMPTY_SECONDS:-60}
+
+# ========================================
+# REMOTE MANAGEMENT
+# ========================================
+enable-rcon=${ENABLE_RCON:-false}
+rcon.password=${RCON_PASSWORD:-}
+rcon.port=${RCON_PORT:-25575}
+enable-command-block=${ENABLE_COMMAND_BLOCK:-false}
+op-permission-level=${OP_PERMISSION_LEVEL:-4}
+
+# ========================================
+# ADVANCED SECURITY
+# ========================================
+rate-limit=${RATE_LIMIT:-0}
+text-filtering-config=${TEXT_FILTERING_CONFIG:-}
+text-filtering-version=${TEXT_FILTERING_VERSION:-0}
+
+# ========================================
+# MONITORING AND LOGGING
+# ========================================
+enable-query=${ENABLE_QUERY:-false}
+enable-jmx-monitoring=${ENABLE_JMX_MONITORING:-false}
+log-ips=${LOG_IPS:-true}
+
+# ========================================
+# USER EXPERIENCE
+# ========================================
+motd=${MOTD:-A Minecraft Server}
+hide-online-players=${HIDE_ONLINE_PLAYERS:-false}
+enable-status=${ENABLE_STATUS:-true}
+
+# ========================================
+# CONTENT MANAGEMENT
+# ========================================
+initial-disabled-packs=${INITIAL_DISABLED_PACKS:-}
+initial-enabled-packs=${INITIAL_ENABLED_PACKS:-vanilla}
+require-resource-pack=${REQUIRE_RESOURCE_PACK:-false}
+resource-pack=${RESOURCE_PACK:-}
+resource-pack-id=${RESOURCE_PACK_ID:-}
+resource-pack-prompt=${RESOURCE_PACK_PROMPT:-}
+resource-pack-sha1=${RESOURCE_PACK_SHA1:-}
+
+# ========================================
+# CONSOLE MANAGEMENT
+# ========================================
+broadcast-console-to-ops=${BROADCAST_CONSOLE_TO_OPS:-true}
+broadcast-rcon-to-ops=${BROADCAST_RCON_TO_OPS:-true}
+bug-report-link=${BUG_REPORT_LINK:-}
