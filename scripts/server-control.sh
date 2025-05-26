@@ -11,6 +11,7 @@ MINECRAFT_HOME="/home/minecraft"
 DOCKER_COMPOSE_FILE="$MINECRAFT_HOME/docker-compose.yml"
 DEPLOY_LOG_DIR="$MINECRAFT_HOME/deploy-logs"
 LOG_FILE="$DEPLOY_LOG_DIR/server-control-$(date +%Y%m%d).log"
+ENV_FILE="${ENV_FILE:-.env.docker}"
 
 # 컨테이너명 (docker-compose.yml에 정의된 서비스명)
 SERVICE_NAME="mc"
@@ -94,7 +95,7 @@ start_server() {
    
    log "서버 시작 중..."
    
-   if docker compose -f "$DOCKER_COMPOSE_FILE" up -d "$SERVICE_NAME"; then
+   if docker compose -f "$DOCKER_COMPOSE_FILE" up --env-file "$ENV_FILE" -d "$SERVICE_NAME"; then
        log "서버 시작 명령 실행 완료"
        
        # 서버 시작 대기 (최대 60초)

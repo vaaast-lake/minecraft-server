@@ -9,6 +9,7 @@ set -e  # 오류 발생시 스크립트 중단
 MINECRAFT_HOME="/home/minecraft"
 REPO_DIR="$(pwd)"
 LOG_FILE="$MINECRAFT_HOME/deploy-logs/deploy-$(date +%Y%m%d).log"
+ENV_FILE="${ENV_FILE:-.env.docker}"
 
 # 로그 함수
 log() {
@@ -92,7 +93,7 @@ case "$DEPLOY_STRATEGY" in
        
        # 컨테이너 재생성
        log "Docker 컨테이너 재생성 중..."
-       docker compose up -d --force-recreate
+       docker compose --env-file "$ENV_FILE" up -d --force-recreate
        ;;
        
    "config-restart")
