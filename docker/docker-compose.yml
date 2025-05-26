@@ -12,17 +12,15 @@ services:
     ports:
       - "${SERVER_PORT}:25565"
     volumes:
-      # HDD Mount
-      - ${MINECRAFT_DATA_PATH}/mods:/data/mods
-      - ${MINECRAFT_DATA_PATH}/world:/data/world
-      - ${MINECRAFT_DATA_PATH}/config:/data/config
-      - ${MINECRAFT_DATA_PATH}/backups:/backups
-      - ${MINECRAFT_DATA_PATH}/logs:/data/logs
-      # SSD Mount
+      - ./world:/data/world
+      - ./backups:/backups
+      - ./logs:/data/logs
+      - ./mods:/data/mods
+      - ./config:/data/config
       - ./server.properties:/data/server.properties
-      - ./whitelist.json:/data/whitelist.json
-      - ./ops.json:/data/ops.json
-      - ./banned-players.json:/data/banned-players.json
+      - .mc-admin/whitelist.json:/data/whitelist.json
+      - .mc-admin/ops.json:/data/ops.json
+      - .mc-admin/banned-players.json:/data/banned-players.json
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "mc-health"]
