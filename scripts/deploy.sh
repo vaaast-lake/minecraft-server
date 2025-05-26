@@ -80,7 +80,6 @@ case "$DEPLOY_STRATEGY" in
        
        # 설정 파일도 함께 처리 (Docker 변경 시 모든 변경사항 포함)
        log "설정 파일 동기화 중..."
-       ./scripts/file-sync.sh config || true
        ./scripts/config-generate.sh || true
        
        # Docker 설정 동기화
@@ -100,7 +99,6 @@ case "$DEPLOY_STRATEGY" in
        log "설정 업데이트 및 재시작 실행 중..."
        
        # 설정 파일 동기화 및 생성
-       ./scripts/file-sync.sh config
        ./scripts/config-generate.sh
        
        # 서버 재시작
@@ -112,7 +110,6 @@ case "$DEPLOY_STRATEGY" in
        
        # 설정 파일 동기화 및 생성
        log "설정 파일 동기화 중..."
-       ./scripts/file-sync.sh config
        ./scripts/config-generate.sh
        
        # 스크립트 파일 동기화
