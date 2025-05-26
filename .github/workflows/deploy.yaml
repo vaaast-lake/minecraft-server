@@ -70,8 +70,9 @@ jobs:
           if [ "${{ inputs.force_deploy }}" = "true" ]; then
             echo "🚨 강제 배포 모드: 변경사항 분석을 건너뜁니다."
             # 수동 전략이 지정된 경우 사용, 그렇지 않으면 기본값
-            if [ "${{ inputs.deploy_strategy }}" != "auto" ]; then
-              DEPLOY_STRATEGY="${{ inputs.deploy_strategy }}"
+            MANUAL_STRATEGY="${{ inputs.deploy_strategy }}"
+            if [ -n "$MANUAL_STRATEGY" ] && [ "$MANUAL_STRATEGY" != "auto" ]; then
+              DEPLOY_STRATEGY="$MANUAL_STRATEGY"
               echo "배포 전략: $DEPLOY_STRATEGY (수동 선택)"
             else
               DEPLOY_STRATEGY="docker-recreate"
@@ -84,10 +85,11 @@ jobs:
             exit 0
           fi
           
-          # 수동 전략이 지정된 경우
-          if [ "${{ inputs.deploy_strategy }}" != "auto" ]; then
-            echo "📋 수동 배포 전략: ${{ inputs.deploy_strategy }}"
-            DEPLOY_STRATEGY="${{ inputs.deploy_strategy }}"
+          # 수동 전략이 지정된 경우 (workflow_dispatch에서만 유효)
+          MANUAL_STRATEGY="${{ inputs.deploy_strategy }}"
+          if [ -n "$MANUAL_STRATEGY" ] && [ "$MANUAL_STRATEGY" != "auto" ]; then
+            echo "📋 수동 배포 전략: $MANUAL_STRATEGY"
+            DEPLOY_STRATEGY="$MANUAL_STRATEGY"
             echo "배포 전략: $DEPLOY_STRATEGY (수동 선택)"
             echo "deploy_strategy=$DEPLOY_STRATEGY" >> $GITHUB_OUTPUT
             echo "has_changes=true" >> $GITHUB_OUTPUT
