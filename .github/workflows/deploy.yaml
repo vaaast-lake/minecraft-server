@@ -15,6 +15,22 @@ on:
         required: false
         type: boolean
         default: false
+      sync_all_files:
+        description: '모든 파일 동기화 (docker + scripts)'
+        required: false
+        type: boolean
+        default: false
+      deploy_strategy:
+        description: '수동 배포 전략 선택 (sync_all_files 활성화 시 무시됨)'
+        required: false
+        type: choice
+        default: 'auto'
+        options:
+          - 'auto'
+          - 'docker-recreate'
+          - 'config-restart'
+          - 'config-scripts-restart'
+          - 'scripts-only'
 
 env:
   MINECRAFT_HOME: /home/minecraft
@@ -38,18 +54,49 @@ jobs:
       - name: Analyze Changes
         id: changes
         run: |
-          # 강제 배포 확인
-          if [ "${{ inputs.force_deploy }}" = "true" ]; then
-            echo "🚨 강제 배포 모드: 변경사항 분석을 건너뜁니다."
-            DEPLOY_STRATEGY="docker-recreate"
-            echo "배포 전략: Docker 재생성 (강제 배포)"
+          # 모든 파일 동기화 요청 확인
+          if [ "${{ inputs.sync_all_files }}" = "true" ]; then
+            echo "🔄 모든 파일 동기화 모드: Docker + Scripts 전체 동기화"
+            DEPLOY_STRATEGY="sync-all"
+            echo "배포 전략: 모든 파일 동기화"
             echo "deploy_strategy=$DEPLOY_STRATEGY" >> $GITHUB_OUTPUT
             echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "force_deploy=true" >> $GITHUB_OUTPUT
+            echo "force_deploy=false" >> $GITHUB_OUTPUT
+            echo "sync_all_files=true" >> $GITHUB_OUTPUT
             exit 0
           fi
           
-          # 변경된 파일 목록 가져오기
+          # 강제 배포 확인
+          if [ "${{ inputs.force_deploy }}" = "true" ]; then
+            echo "🚨 강제 배포 모드: 변경사항 분석을 건너뜁니다."
+            # 수동 전략이 지정된 경우 사용, 그렇지 않으면 기본값
+            if [ "${{ inputs.deploy_strategy }}" != "auto" ]; then
+              DEPLOY_STRATEGY="${{ inputs.deploy_strategy }}"
+              echo "배포 전략: $DEPLOY_STRATEGY (수동 선택)"
+            else
+              DEPLOY_STRATEGY="docker-recreate"
+              echo "배포 전략: Docker 재생성 (강제 배포 기본값)"
+            fi
+            echo "deploy_strategy=$DEPLOY_STRATEGY" >> $GITHUB_OUTPUT
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "force_deploy=true" >> $GITHUB_OUTPUT
+            echo "sync_all_files=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # 수동 전략이 지정된 경우
+          if [ "${{ inputs.deploy_strategy }}" != "auto" ]; then
+            echo "📋 수동 배포 전략: ${{ inputs.deploy_strategy }}"
+            DEPLOY_STRATEGY="${{ inputs.deploy_strategy }}"
+            echo "배포 전략: $DEPLOY_STRATEGY (수동 선택)"
+            echo "deploy_strategy=$DEPLOY_STRATEGY" >> $GITHUB_OUTPUT
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "force_deploy=false" >> $GITHUB_OUTPUT
+            echo "sync_all_files=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # 자동 변경사항 분석 (기존 로직)
           CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
           echo "변경된 파일: $CHANGED_FILES"
           
@@ -98,14 +145,38 @@ jobs:
           echo "scripts_changed=$SCRIPTS_CHANGED" >> $GITHUB_OUTPUT
           echo "has_changes=$([ "$DEPLOY_STRATEGY" != "none" ] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
           echo "force_deploy=false" >> $GITHUB_OUTPUT
+          echo "sync_all_files=false" >> $GITHUB_OUTPUT
+      
+      - name: Execute Sync All Files
+        if: steps.changes.outputs.sync_all_files == 'true'
+        run: |
+          echo "🔄 모든 파일 동기화 실행 중..."
+          echo "  - Docker 설정 동기화"
+          echo "  - 스크립트 파일 동기화"
+          ./scripts/file-sync.sh all
+          
+          # 동기화 후 서버 상태에 따라 재시작 결정
+          SERVER_STATUS=$(./scripts/server-control.sh status | grep "서버 상태:" | tail -1 || echo "unknown")
+          echo "현재 서버 상태: $SERVER_STATUS"
+          
+          if echo "$SERVER_STATUS" | grep -q "실행 중"; then
+            echo "서버가 실행 중이므로 재시작을 수행합니다."
+            ./scripts/server-control.sh restart
+          else
+            echo "서버가 중지된 상태이므로 시작만 수행합니다."
+            ./scripts/server-control.sh start
+          fi
+        env:
+          FORCE_DEPLOY: 'false'
       
       - name: Execute Deploy
-        if: steps.changes.outputs.has_changes == 'true'
+        if: steps.changes.outputs.has_changes == 'true' && steps.changes.outputs.sync_all_files == 'false'
         run: |
           if [ "${{ steps.changes.outputs.force_deploy }}" = "true" ]; then
             echo "🚨 강제 배포 실행 중..."
             ./scripts/deploy.sh --strategy=${{ steps.changes.outputs.deploy_strategy }} --force
           else
+            echo "📋 일반 배포 실행 중..."
             ./scripts/deploy.sh --strategy=${{ steps.changes.outputs.deploy_strategy }}
           fi
         env:
@@ -116,11 +187,29 @@ jobs:
         run: echo "변경사항이 없어 배포를 건너뜁니다."
       
       - name: Verify Deployment
-        if: success()
+        if: success() && steps.changes.outputs.has_changes == 'true'
         run: |
+          echo "배포 검증 중..."
           sleep 10
           ./scripts/server-control.sh status
         continue-on-error: true
+      
+      - name: Deploy Summary
+        if: always()
+        run: |
+          echo "=== 배포 요약 ==="
+          echo "배포 전략: ${{ steps.changes.outputs.deploy_strategy }}"
+          echo "강제 배포: ${{ steps.changes.outputs.force_deploy }}"
+          echo "모든 파일 동기화: ${{ steps.changes.outputs.sync_all_files }}"
+          echo "변경사항 있음: ${{ steps.changes.outputs.has_changes }}"
+          
+          if [ "${{ steps.changes.outputs.sync_all_files }}" = "true" ]; then
+            echo "✅ 모든 파일 동기화 완료"
+          elif [ "${{ steps.changes.outputs.has_changes }}" = "true" ]; then
+            echo "✅ 배포 완료: ${{ steps.changes.outputs.deploy_strategy }}"
+          else
+            echo "ℹ️ 변경사항 없음 - 배포 건너뜀"
+          fi
       
       - name: Archive Logs
         uses: actions/upload-artifact@v4
