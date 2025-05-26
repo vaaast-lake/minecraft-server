@@ -18,3 +18,7 @@ secrets/
 
 # 설정 파일
 server.properties
+
+# 임시 파일
+tmp.*
+test.*
