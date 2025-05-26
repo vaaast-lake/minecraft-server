@@ -1,26 +1,153 @@
-name: Deploy Minecraft Server
+name: Minecraft Server Deploy
 
-# main 브랜치에 푸시가 있을 때 워크플로우 실행
 on:
   push:
     branches:
       - main
+    paths:
+      - 'scripts/**'
+      - 'config/**'
+      - 'docker/**'
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: '강제 배포 (변경사항 무시)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  MINECRAFT_HOME: /home/minecraft
 
 jobs:
   deploy:
     name: Deploy Minecraft Server
-    # 셀프 호스티드 러너 사용
     runs-on: self-hosted
     
     steps:
-      # 1. 코드 체크아웃
-      - name: Checkout code
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      
+      - name: Setup Environment
+        run: |
+          mkdir -p $MINECRAFT_HOME/deploy-logs
+          chmod +x scripts/*.sh
+      
+      - name: Analyze Changes
+        id: changes
+        run: |
+          # 강제 배포 확인
+          if [ "${{ inputs.force_deploy }}" = "true" ]; then
+            echo "🚨 강제 배포 모드: 변경사항 분석을 건너뜁니다."
+            DEPLOY_STRATEGY="docker-recreate"
+            echo "배포 전략: Docker 재생성 (강제 배포)"
+            echo "deploy_strategy=$DEPLOY_STRATEGY" >> $GITHUB_OUTPUT
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "force_deploy=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # 변경된 파일 목록 가져오기
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
+          echo "변경된 파일: $CHANGED_FILES"
+          
+          # 변경 유형 분석
+          CONFIG_CHANGED=false
+          DOCKER_CHANGED=false
+          SCRIPTS_CHANGED=false
+          
+          if echo "$CHANGED_FILES" | grep -q "^config/"; then
+            CONFIG_CHANGED=true
+            echo "설정 파일 변경 감지"
+          fi
+          
+          if echo "$CHANGED_FILES" | grep -q "^docker/"; then
+            DOCKER_CHANGED=true
+            echo "Docker 설정 변경 감지"
+          fi
+          
+          if echo "$CHANGED_FILES" | grep -q "^scripts/"; then
+            SCRIPTS_CHANGED=true
+            echo "스크립트 변경 감지"
+          fi
+          
+          # 배포 전략 결정 (우선순위 기반)
+          if [ "$DOCKER_CHANGED" = true ]; then
+            DEPLOY_STRATEGY="docker-recreate"
+            echo "배포 전략: Docker 재생성 (모든 변경사항 포함)"
+          elif [ "$CONFIG_CHANGED" = true ] && [ "$SCRIPTS_CHANGED" = true ]; then
+            DEPLOY_STRATEGY="config-scripts-restart"
+            echo "배포 전략: 설정+스크립트 업데이트 + 서버 재시작"
+          elif [ "$CONFIG_CHANGED" = true ]; then
+            DEPLOY_STRATEGY="config-restart"
+            echo "배포 전략: 설정 업데이트 + 서버 재시작"
+          elif [ "$SCRIPTS_CHANGED" = true ]; then
+            DEPLOY_STRATEGY="scripts-only"
+            echo "배포 전략: 스크립트 동기화만"
+          else
+            DEPLOY_STRATEGY="none"
+            echo "배포 전략: 변경사항 없음"
+          fi
+          
+          # 출력 설정
+          echo "deploy_strategy=$DEPLOY_STRATEGY" >> $GITHUB_OUTPUT
+          echo "config_changed=$CONFIG_CHANGED" >> $GITHUB_OUTPUT
+          echo "docker_changed=$DOCKER_CHANGED" >> $GITHUB_OUTPUT
+          echo "scripts_changed=$SCRIPTS_CHANGED" >> $GITHUB_OUTPUT
+          echo "has_changes=$([ "$DEPLOY_STRATEGY" != "none" ] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "force_deploy=false" >> $GITHUB_OUTPUT
+      
+      - name: Execute Deploy
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          if [ "${{ steps.changes.outputs.force_deploy }}" = "true" ]; then
+            echo "🚨 강제 배포 실행 중..."
+            ./scripts/deploy.sh --strategy=${{ steps.changes.outputs.deploy_strategy }} --force
+          else
+            ./scripts/deploy.sh --strategy=${{ steps.changes.outputs.deploy_strategy }}
+          fi
+        env:
+          FORCE_DEPLOY: ${{ inputs.force_deploy || 'false' }}
+      
+      - name: Skip Deploy
+        if: steps.changes.outputs.has_changes == 'false'
+        run: echo "변경사항이 없어 배포를 건너뜁니다."
+      
+      - name: Verify Deployment
+        if: success()
+        run: |
+          sleep 10
+          ./scripts/server-control.sh status
+        continue-on-error: true
+      
+      - name: Archive Logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deploy-logs-${{ github.run_number }}
+          path: ${{ env.MINECRAFT_HOME }}/deploy-logs/deploy-*.log
+          retention-days: 7
+
+  backup:
+    name: Backup World Data
+    runs-on: self-hosted
+    needs: deploy
+    if: success()
+    
+    steps:
+      - name: Checkout Repository
         uses: actions/checkout@v4
       
-      # 2. 환경 확인
-      - name: Check environment
-        run: echo "Deploying to production environment"
-        
-      # 3. 서버 배포
-      - name: Deploy server
-        run: echo "Deploying Minecraft server..."
+      - name: Execute Backup
+        run: ./scripts/backup.sh
+        continue-on-error: true
+      
+      - name: Archive Backup Logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backup-logs-${{ github.run_number }}
+          path: ${{ env.MINECRAFT_HOME }}/deploy-logs/backup-*.log
+          retention-days: 3
