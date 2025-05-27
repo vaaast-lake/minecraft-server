@@ -14,11 +14,7 @@ services:
       - ./backups:/backups
       - ./logs:/data/logs
       - ./mods:/data/mods
-      - ./config:/data/config
       - ./server.properties:/data/server.properties
-      - .mc-admin/whitelist.json:/data/whitelist.json
-      - .mc-admin/ops.json:/data/ops.json
-      - .mc-admin/banned-players.json:/data/banned-players.json
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "mc-health"]
