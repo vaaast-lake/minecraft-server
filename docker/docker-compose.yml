@@ -1,12 +1,8 @@
 services:
   mc:
     image: itzg/minecraft-server
-    environment:
-      EULA: true
-      TYPE: ${TYPE}
-      VERSION: ${MINECRAFT_VERSION}
-      NEOFORGE_VERSION: beta
-      MEMORY: ${MEMORY}
+    env_file:
+      - .env.mc
     ports:
       - "${SERVER_PORT}:25565"
     volumes:
