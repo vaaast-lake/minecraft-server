@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - 'scripts/**'
-      - 'config/**'
       - 'docker/**'
   workflow_dispatch:
     inputs:
@@ -28,8 +27,6 @@ on:
         options:
           - 'auto'
           - 'docker-recreate'
-          - 'config-restart'
-          - 'config-scripts-restart'
           - 'scripts-only'
 
 env:
@@ -103,14 +100,8 @@ jobs:
           echo "변경된 파일: $CHANGED_FILES"
           
           # 변경 유형 분석
-          CONFIG_CHANGED=false
           DOCKER_CHANGED=false
           SCRIPTS_CHANGED=false
-          
-          if echo "$CHANGED_FILES" | grep -q "^config/"; then
-            CONFIG_CHANGED=true
-            echo "설정 파일 변경 감지"
-          fi
           
           if echo "$CHANGED_FILES" | grep -q "^docker/"; then
             DOCKER_CHANGED=true
@@ -126,12 +117,6 @@ jobs:
           if [ "$DOCKER_CHANGED" = true ]; then
             DEPLOY_STRATEGY="docker-recreate"
             echo "배포 전략: Docker 재생성 (모든 변경사항 포함)"
-          elif [ "$CONFIG_CHANGED" = true ] && [ "$SCRIPTS_CHANGED" = true ]; then
-            DEPLOY_STRATEGY="config-scripts-restart"
-            echo "배포 전략: 설정+스크립트 업데이트 + 서버 재시작"
-          elif [ "$CONFIG_CHANGED" = true ]; then
-            DEPLOY_STRATEGY="config-restart"
-            echo "배포 전략: 설정 업데이트 + 서버 재시작"
           elif [ "$SCRIPTS_CHANGED" = true ]; then
             DEPLOY_STRATEGY="scripts-only"
             echo "배포 전략: 스크립트 동기화만"
@@ -142,7 +127,6 @@ jobs:
           
           # 출력 설정
           echo "deploy_strategy=$DEPLOY_STRATEGY" >> $GITHUB_OUTPUT
-          echo "config_changed=$CONFIG_CHANGED" >> $GITHUB_OUTPUT
           echo "docker_changed=$DOCKER_CHANGED" >> $GITHUB_OUTPUT
           echo "scripts_changed=$SCRIPTS_CHANGED" >> $GITHUB_OUTPUT
           echo "has_changes=$([ "$DEPLOY_STRATEGY" != "none" ] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
