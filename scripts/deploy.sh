@@ -25,8 +25,6 @@ show_help() {
 
 배포 전략:
   --strategy=docker-recreate       Docker 컨테이너 재생성 (전체 재배포)
-  --strategy=config-restart        설정 업데이트 후 서버 재시작
-  --strategy=config-scripts-restart 설정+스크립트 업데이트 후 서버 재시작
   --strategy=scripts-only          스크립트 파일만 동기화 (재시작 없음)
 
 옵션:
@@ -34,7 +32,6 @@ show_help() {
   --help, -h                    도움말 표시
 
 예시:
-  $0 --strategy=config-restart
   $0 --strategy=docker-recreate --force
 EOF
    exit 0
@@ -79,10 +76,6 @@ case "$DEPLOY_STRATEGY" in
    "docker-recreate")
        log "Docker 재생성 배포 실행 중..."
        
-       # 설정 파일도 함께 처리 (Docker 변경 시 모든 변경사항 포함)
-       log "설정 파일 동기화 중..."
-       ./scripts/config-generate.sh || true
-       
        # Docker 설정 동기화
        log "Docker 설정 동기화 중..."
        ./scripts/file-sync.sh docker
@@ -94,31 +87,6 @@ case "$DEPLOY_STRATEGY" in
        # 컨테이너 재생성
        log "Docker 컨테이너 재생성 중..."
        docker compose --env-file "$ENV_FILE" up -d --force-recreate
-       ;;
-       
-   "config-restart")
-       log "설정 업데이트 및 재시작 실행 중..."
-       
-       # 설정 파일 동기화 및 생성
-       ./scripts/config-generate.sh
-       
-       # 서버 재시작
-       ./scripts/server-control.sh restart
-       ;;
-   
-   "config-scripts-restart")
-       log "설정+스크립트 업데이트 및 재시작 실행 중..."
-       
-       # 설정 파일 동기화 및 생성
-       log "설정 파일 동기화 중..."
-       ./scripts/config-generate.sh
-       
-       # 스크립트 파일 동기화
-       log "스크립트 파일 동기화 중..."
-       ./scripts/file-sync.sh scripts
-       
-       # 서버 재시작
-       ./scripts/server-control.sh restart
        ;;
        
    "scripts-only")
