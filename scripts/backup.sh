@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# backup.sh - 마인크래프트 월드 백업 스크립트
+# backup.sh - 마인크래프트 월드 백업 스크립트 (개선 버전)
 # 12시간마다 실행되어 월드 데이터를 백업하고 최근 2개만 보관
 
 set -e  # 오류 발생시 스크립트 중단
@@ -40,12 +40,28 @@ fi
 world_size=$(du -sh "$WORLD_DIR" | cut -f1)
 log "백업 대상 월드 크기: $world_size"
 
+# 디스크 공간 확인
+log "디스크 공간 확인 중..."
+available_space=$(df "$BACKUP_DIR" | awk 'NR==2 {print $4}')
+world_size_kb=$(du -sk "$WORLD_DIR" | cut -f1)
+required_space=$((world_size_kb * 2))  # 압축을 고려한 여유 공간
+
+if [ "$available_space" -lt "$required_space" ]; then
+    log "ERROR: 디스크 공간이 부족합니다. (필요: ${required_space}KB, 사용가능: ${available_space}KB)"
+    exit 1
+fi
+
+log "디스크 공간 충분 (사용가능: $(($available_space/1024))MB)"
+
 # 백업 생성
 log "백업 파일 생성 중: $BACKUP_FILENAME"
 start_time=$(date +%s)
 
 # tar를 사용하여 압축 백업 생성
 if tar -czf "$BACKUP_PATH" -C "$MINECRAFT_HOME" "world/"; then
+   # 백업 파일 권한을 소유자만 읽기/쓰기로 제한
+   chmod 600 "$BACKUP_PATH"
+   
    end_time=$(date +%s)
    duration=$((end_time - start_time))
    backup_size=$(du -sh "$BACKUP_PATH" | cut -f1)
@@ -64,31 +80,35 @@ else
    exit 1
 fi
 
-# 기존 백업 정리 (최근 2개만 보관)
+# 기존 백업 정리 (최근 N개만 보관)
 log "기존 백업 파일 정리 중..."
 
-# 백업 파일 목록을 시간순으로 정렬 (최신 순)
-backup_files=$(ls -t "$BACKUP_DIR"/world-backup-*.tar.gz 2>/dev/null || true)
-backup_count=$(echo "$backup_files" | wc -l)
-
-log "현재 백업 파일 개수: $backup_count"
-
-if [ "$backup_count" -gt "$KEEP_BACKUPS" ]; then
-   # 보관할 개수를 초과하는 오래된 백업 삭제
-   files_to_delete=$(echo "$backup_files" | tail -n +$((KEEP_BACKUPS + 1)))
-   
-   for file in $files_to_delete; do
-       if [ -f "$file" ]; then
-           file_size=$(du -sh "$file" | cut -f1)
-           rm -f "$file"
-           log "오래된 백업 삭제: $(basename "$file") (크기: $file_size)"
-       fi
-   done
-   
-   remaining_count=$(ls -1 "$BACKUP_DIR"/world-backup-*.tar.gz 2>/dev/null | wc -l)
-   log "백업 정리 완료 (남은 백업: $remaining_count개)"
+# 백업 파일이 존재하는지 먼저 확인
+if ls "$BACKUP_DIR"/world-backup-*.tar.gz 1> /dev/null 2>&1; then
+    backup_files=$(ls -t "$BACKUP_DIR"/world-backup-*.tar.gz)
+    backup_count=$(echo "$backup_files" | wc -l)
+    
+    log "현재 백업 파일 개수: $backup_count"
+    
+    if [ "$backup_count" -gt "$KEEP_BACKUPS" ]; then
+        # 보관할 개수를 초과하는 오래된 백업 삭제
+        files_to_delete=$(echo "$backup_files" | tail -n +$((KEEP_BACKUPS + 1)))
+        
+        for file in $files_to_delete; do
+            if [ -f "$file" ]; then
+                file_size=$(du -sh "$file" | cut -f1)
+                rm -f "$file"
+                log "오래된 백업 삭제: $(basename "$file") (크기: $file_size)"
+            fi
+        done
+        
+        remaining_count=$(ls -1 "$BACKUP_DIR"/world-backup-*.tar.gz 2>/dev/null | wc -l)
+        log "백업 정리 완료 (남은 백업: $remaining_count개)"
+    else
+        log "백업 정리 불필요 (현재: $backup_count개, 최대: $KEEP_BACKUPS개)"
+    fi
 else
-   log "백업 정리 불필요 (현재: $backup_count개, 최대: $KEEP_BACKUPS개)"
+    log "기존 백업 파일이 없습니다."
 fi
 
 # 최종 백업 현황 출력
@@ -107,5 +127,9 @@ fi
 # 디스크 사용량 확인
 backup_dir_size=$(du -sh "$BACKUP_DIR" | cut -f1)
 log "백업 디렉토리 총 크기: $backup_dir_size"
+
+# 최종 상태 요약
+total_backups=$(ls -1 "$BACKUP_DIR"/world-backup-*.tar.gz 2>/dev/null | wc -l)
+log "백업 완료 - 총 ${total_backups}개 백업 보관 중"
 
 log "=== 월드 백업 완료 ==="
