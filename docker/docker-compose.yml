@@ -10,6 +10,12 @@ services:
       - ./logs:/data/logs
       - ./mods:/data/mods
       - ./server.properties:/data/server.properties
+      - /dev/hugepages:/dev/hugepages
+      - ${PLAYER_MGMT_PATH}/banned-ips.json:/data/banned-ips.json
+      - ${PLAYER_MGMT_PATH}/banned-players.json:/data/banned-players.json
+      - ${PLAYER_MGMT_PATH}/ops.json:/data/ops.json
+      - ${PLAYER_MGMT_PATH}/usercache.json:/data/usercache.json
+      - ${PLAYER_MGMT_PATH}/whitelist.json:/data/whitelist.json
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "mc-health"]
