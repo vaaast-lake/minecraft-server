@@ -10,6 +10,7 @@ services:
       - ./logs:/data/logs
       - ./mods:/data/mods
       - ./server.properties:/data/server.properties
+      - ./config:/data/config
       - /dev/hugepages:/dev/hugepages
       - ${PLAYER_MGMT_PATH}/banned-ips.json:/data/banned-ips.json
       - ${PLAYER_MGMT_PATH}/banned-players.json:/data/banned-players.json
