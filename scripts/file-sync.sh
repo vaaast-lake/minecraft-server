@@ -86,7 +86,7 @@ case "$SYNC_TARGET" in
        log "스크립트 파일 동기화 중..."
        sync_files "scripts" "$MINECRAFT_HOME/scripts" "스크립트"
        # 실행 권한 부여
-       chmod +x "$MINECRAFT_HOME/scripts/"*.sh 2>/dev/null || true
+       chmod 750 "$MINECRAFT_HOME/scripts/"*.sh 2>/dev/null || true
        log "스크립트 실행 권한 부여 완료"
        ;;
        
@@ -94,7 +94,7 @@ case "$SYNC_TARGET" in
        log "모든 파일 동기화 중..."
        sync_single_file "docker/docker-compose.yml" "$MINECRAFT_HOME/docker-compose.yml" "Docker Compose"
        sync_files "scripts" "$MINECRAFT_HOME/scripts" "스크립트"
-       chmod +x "$MINECRAFT_HOME/scripts/"*.sh 2>/dev/null || true
+       chmod 750 "$MINECRAFT_HOME/scripts/"*.sh 2>/dev/null || true
        log "모든 파일 동기화 및 권한 설정 완료"
        ;;
        

@@ -46,7 +46,7 @@ jobs:
       - name: Setup Environment
         run: |
           mkdir -p $MINECRAFT_HOME/deploy-logs
-          chmod +x scripts/*.sh
+          chmod 750 scripts/*.sh
       
       - name: Analyze Changes
         id: changes
