@@ -147,7 +147,7 @@ jobs:
           
           if echo "$SERVER_STATUS" | grep -q "실행 중"; then
             echo "서버가 실행 중이므로 재시작을 수행합니다."
-            ./scripts/server-control.sh restart
+            ./scripts/server-control.sh restart --recreate --graceful
           else
             echo "서버가 중지된 상태이므로 시작만 수행합니다."
             ./scripts/server-control.sh start
