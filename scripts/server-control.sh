@@ -25,7 +25,7 @@ show_help() {
    cat << EOF
 마인크래프트 서버 제어 스크립트
 
-사용법: $0 <command>
+사용법: $0 <command> [options]
 
 가능한 명령어:
   start    - 서버 시작
@@ -38,14 +38,25 @@ show_help() {
 옵션:
   --recreate    재시작 시 컨테이너 완전 재생성 (down → up)
                 기본값은 stop → start
+  --graceful    중지/재시작 시 플레이어에게 사전 공지
+                플레이어가 없으면 즉시 실행
   -h, --help    이 도움말 표시
 
 예시:
-  $0 start              # 서버 시작
-  $0 restart            # 일반 재시작 (stop → start)
-  $0 restart --recreate # 컨테이너 재생성 (down → up, 설정 변경 반영)
-  $0 status             # 서버 상태 확인
-  $0 logs               # 서버 로그 보기
+  $0 start                          # 서버 시작
+  $0 stop                           # 즉시 서버 중지
+  $0 stop --graceful                # 플레이어 공지 후 서버 중지
+  $0 restart                        # 일반 재시작 (stop → start)
+  $0 restart --graceful             # 공지 후 일반 재시작
+  $0 restart --recreate             # 컨테이너 재생성 (설정 변경 반영)
+  $0 restart --recreate --graceful  # 공지 후 컨테이너 재생성
+  $0 status                         # 서버 상태 확인
+  $0 logs                           # 서버 로그 보기
+
+참고:
+  - --graceful 옵션은 stop, restart 명령어에서만 사용 가능
+  - 플레이어가 접속 중일 때만 공지하며, 없으면 즉시 실행
+  - 공지 순서: 2분전 → 1분전 → 30초전 → 10초 카운트다운 → 월드저장 → 실행
 EOF
    exit 0
 }
@@ -68,6 +79,85 @@ check_docker_compose() {
        log "ERROR: Docker Compose 파일이 존재하지 않습니다: $DOCKER_COMPOSE_FILE"
        exit 1
    fi
+}
+
+# RCON 명령어 실행 함수
+execute_rcon() {
+   local command="$1"
+   if ! docker compose -f "$DOCKER_COMPOSE_FILE" exec "$SERVICE_NAME" rcon-cli "$command" >/dev/null 2>&1; then
+       log "WARNING: RCON 명령어 실행 실패: $command"
+       return 1
+   fi
+   return 0
+}
+
+# 플레이어 수 확인 함수
+get_player_count() {
+   local player_output
+   if player_output=$(docker compose -f "$DOCKER_COMPOSE_FILE" exec "$SERVICE_NAME" rcon-cli list 2>/dev/null); then
+       local player_count=$(echo "$player_output" | grep -o "There are [0-9]\+" | grep -o "[0-9]\+" || echo "0")
+       echo "$player_count"
+   else
+       log "WARNING: 플레이어 수 확인 실패"
+       echo "0"
+   fi
+}
+
+# Graceful 공지 및 대기 함수
+graceful_announcement() {
+   log "=== Graceful 서버 종료 시작 ==="
+   
+   local player_count=$(get_player_count)
+   log "현재 플레이어 수: $player_count"
+   
+   # 플레이어가 없으면 공지 없이 바로 종료
+   if [ "$player_count" -eq 0 ]; then
+       log "플레이어가 없어 즉시 서버를 중지합니다."
+       return 0
+   fi
+   
+   # 플레이어가 있으면 graceful 공지 시작
+   log "플레이어가 접속 중이므로 공지 후 서버를 중지합니다."
+   
+   # 2분 전 공지
+   execute_rcon "say §b[공지] 2분 후 서버를 재시작할 예정입니다! 모두 안전한 곳으로 이동 후 종료해주시길 바랍니다!"
+   log "2분 전 공지 완료"
+   sleep 60
+   
+   # 1분 전 공지
+   execute_rcon "say §c[공지] 서버가 1분 후 재시작됩니다!"
+   log "1분 전 공지 완료"
+   sleep 30
+   
+   # 30초 전 공지
+   execute_rcon "say §c[공지] 서버가 30초 후 재시작됩니다!"
+   log "30초 전 공지 완료"
+   sleep 20
+   
+   # 10초 전 공지
+   execute_rcon "say §c[공지] 서버가 10초 후 재시작됩니다!"
+   log "10초 전 공지 완료"
+   sleep 1
+   
+   # 카운트다운
+   for i in {9..1}; do
+       execute_rcon "say §c[공지] ${i}초..."
+       sleep 1
+   done
+   
+   # 월드 저장 공지 및 실행
+   execute_rcon "say §4[공지] 월드를 저장합니다!"
+   execute_rcon "save-all"
+   log "월드 저장 완료"
+   
+   for i in {5..1}; do
+       execute_rcon "say §c[공지] 월드 저장중..."
+       sleep 1
+   done
+   
+   # 최종 공지
+   execute_rcon "say §4[공지] 서버를 재시작합니다!"
+   log "Graceful 공지 완료"
 }
 
 # 서버 상태 확인
@@ -122,6 +212,22 @@ start_server() {
 
 # 서버 중지
 stop_server() {
+
+    local graceful_mode=false
+   
+    # 플래그 파싱
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --graceful)
+                graceful_mode=true
+                shift
+                ;;
+            *)
+                usage_error "stop 명령어에 알 수 없는 옵션: '$1'"
+                ;;
+        esac
+    done
+
    log "=== 서버 중지 ==="
    
    local status=$(get_server_status)
@@ -130,6 +236,11 @@ stop_server() {
        log "서버가 실행 중이 아닙니다. (상태: $status)"
        return 0
    fi
+
+    # Graceful 모드면 공지 실행
+    if [ "$graceful_mode" = true ]; then
+        graceful_announcement
+    fi
    
    log "서버 중지 중..."
    
@@ -160,6 +271,21 @@ stop_server() {
 
 # 서버 완전 중지 (컨테이너 삭제)
 down_server() {
+    local graceful_mode=false
+   
+   # 플래그 파싱
+   while [[ $# -gt 0 ]]; do
+       case $1 in
+           --graceful)
+               graceful_mode=true
+               shift
+               ;;
+           *)
+               usage_error "down 명령어에 알 수 없는 옵션: '$1'"
+               ;;
+       esac
+   done
+
    log "=== 서버 완전 중지 (컨테이너 삭제) ==="
    
    local status=$(get_server_status)
@@ -167,6 +293,11 @@ down_server() {
    if [ "$status" = "not_created" ]; then
        log "서버 컨테이너가 존재하지 않습니다."
        return 0
+   fi
+
+    # 서버가 실행 중이고 graceful 모드면 공지 실행
+   if [ "$status" = "running" ] && [ "$graceful_mode" = true ]; then
+       graceful_announcement
    fi
    
    log "서버 컨테이너 삭제 중..."
@@ -182,12 +313,17 @@ down_server() {
 # 서버 재시작
 restart_server() {
     local recreate_mode=false
+    local graceful_mode=false
 
     # 플래그 파싱
     while [[ $# -gt 0 ]]; do
         case $1 in
             --recreate)
                 recreate_mode=true
+                shift
+                ;;
+            --graceful)
+                graceful_mode=true
                 shift
                 ;;
             *)
@@ -198,14 +334,21 @@ restart_server() {
 
     if [ "$recreate_mode" = true ]; then
        log "=== 서버 재시작 (컨테이너 재생성) ==="
-       down_server
-       sleep 2
-       start_server
+       if [ "$graceful_mode" = true ]; then
+            down_server --graceful
+        else
+            down_server
+        fi
+        sleep 2
+        start_server
    else
-       log "=== 서버 재시작 (일반) ==="
-       stop_server
-       sleep 2
-       start_server
+       if [ "$graceful_mode" = true ]; then
+            stop_server --graceful
+        else
+            stop_server
+        fi
+        sleep 2
+        start_server
    fi
 }
 
@@ -261,7 +404,7 @@ show_logs() {
 
 # 인자 파싱
 COMMAND=""
-RESTART_OPTIONS=()
+COMMAND_OPTIONS=()
 
 # 명령어 처리 - 도움말 및 유효성 검사
 if [ $# -eq 0 ]; then
@@ -278,17 +421,15 @@ case "$COMMAND" in
        ;;
 esac
 
-# 나머지 인자들을 restart 옵션으로 저장 (restart 명령어가 아닌 경우 에러 처리)
-if [ "$COMMAND" = "restart" ]; then
-   RESTART_OPTIONS=("$@")
-elif [ $# -gt 0 ]; then
-   usage_error "'$COMMAND' 명령어는 추가 옵션을 받지 않습니다"
-fi
-
-# 유효한 명령어 확인
+# 나머지 인자들을 명령어 옵션으로 저장 (옵션을 받는 명령어가 아닌 경우 에러 처리)
 case "$COMMAND" in
-   "start"|"stop"|"restart"|"status"|"logs")
-       # 유효한 명령어 - 아래에서 처리
+   "restart"|"stop")
+       COMMAND_OPTIONS=("$@")
+       ;;
+   "start"|"status"|"logs")
+       if [ $# -gt 0 ]; then
+           usage_error "'$COMMAND' 명령어는 추가 옵션을 받지 않습니다"
+       fi
        ;;
    *)
        usage_error "알 수 없는 명령어: '$COMMAND'"
@@ -307,10 +448,10 @@ case "$COMMAND" in
        start_server
        ;;
    "stop")
-       stop_server
+       stop_server "${COMMAND_OPTIONS[@]}"
        ;;
    "restart")
-       restart_server "${RESTART_OPTIONS[@]}"
+       restart_server "${COMMAND_OPTIONS[@]}"
        ;;
    "status")
        show_status
