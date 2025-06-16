@@ -204,25 +204,3 @@ jobs:
           name: deploy-logs-${{ github.run_number }}
           path: ${{ env.MINECRAFT_HOME }}/deploy-logs/deploy-*.log
           retention-days: 7
-
-  backup:
-    name: Backup World Data
-    runs-on: self-hosted
-    needs: deploy
-    if: success()
-    
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-      
-      - name: Execute Backup
-        run: ./scripts/backup.sh
-        continue-on-error: true
-      
-      - name: Archive Backup Logs
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: backup-logs-${{ github.run_number }}
-          path: ${{ env.MINECRAFT_HOME }}/deploy-logs/backup-*.log
-          retention-days: 3
