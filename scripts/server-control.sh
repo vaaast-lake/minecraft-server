@@ -36,12 +36,16 @@ show_help() {
   help     - 이 도움말 표시
 
 옵션:
+  --recreate    재시작 시 컨테이너 완전 재생성 (down → up)
+                기본값은 stop → start
   -h, --help    이 도움말 표시
 
 예시:
-  $0 start      # 서버 시작
-  $0 status     # 서버 상태 확인
-  $0 logs       # 서버 로그 보기
+  $0 start              # 서버 시작
+  $0 restart            # 일반 재시작 (stop → start)
+  $0 restart --recreate # 컨테이너 재생성 (down → up, 설정 변경 반영)
+  $0 status             # 서버 상태 확인
+  $0 logs               # 서버 로그 보기
 EOF
    exit 0
 }
@@ -52,7 +56,7 @@ usage_error() {
        echo "오류: $1" >&2
    fi
    echo "" >&2
-   echo "사용법: $0 <command>" >&2
+   echo "사용법: $0 <command> [options]" >&2
    echo "사용 가능한 명령어: start, stop, restart, status, logs, help" >&2
    echo "자세한 도움말: $0 --help" >&2
    exit 1
@@ -154,12 +158,55 @@ stop_server() {
    fi
 }
 
+# 서버 완전 중지 (컨테이너 삭제)
+down_server() {
+   log "=== 서버 완전 중지 (컨테이너 삭제) ==="
+   
+   local status=$(get_server_status)
+   
+   if [ "$status" = "not_created" ]; then
+       log "서버 컨테이너가 존재하지 않습니다."
+       return 0
+   fi
+   
+   log "서버 컨테이너 삭제 중..."
+   
+   if docker compose -f "$DOCKER_COMPOSE_FILE" down "$SERVICE_NAME"; then
+       log "서버 컨테이너 삭제 완료"
+   else
+       log "ERROR: 서버 컨테이너 삭제 실패"
+       exit 1
+   fi
+}
+
 # 서버 재시작
 restart_server() {
-   log "=== 서버 재시작 ==="
-   stop_server
-   sleep 2
-   start_server
+    local recreate_mode=false
+
+    # 플래그 파싱
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --recreate)
+                recreate_mode=true
+                shift
+                ;;
+            *)
+                usage_error "restart 명령어에 알 수 없는 옵션: '$1'"
+                ;;
+        esac
+    done
+
+    if [ "$recreate_mode" = true ]; then
+       log "=== 서버 재시작 (컨테이너 재생성) ==="
+       down_server
+       sleep 2
+       start_server
+   else
+       log "=== 서버 재시작 (일반) ==="
+       stop_server
+       sleep 2
+       start_server
+   fi
 }
 
 # 서버 상태 확인
@@ -212,18 +259,34 @@ show_logs() {
    docker compose -f "$DOCKER_COMPOSE_FILE" logs --tail=50 -f "$SERVICE_NAME"
 }
 
+# 인자 파싱
+COMMAND=""
+RESTART_OPTIONS=()
+
 # 명령어 처리 - 도움말 및 유효성 검사
 if [ $# -eq 0 ]; then
    usage_error "명령어가 필요합니다"
 fi
 
 COMMAND="$1"
+shift
 
-# 도움말 요청 및 명령어 처리를 한 번에
+# 도움말 처리
 case "$COMMAND" in
    "-h"|"--help"|"help")
        show_help
        ;;
+esac
+
+# 나머지 인자들을 restart 옵션으로 저장 (restart 명령어가 아닌 경우 에러 처리)
+if [ "$COMMAND" = "restart" ]; then
+   RESTART_OPTIONS=("$@")
+elif [ $# -gt 0 ]; then
+   usage_error "'$COMMAND' 명령어는 추가 옵션을 받지 않습니다"
+fi
+
+# 유효한 명령어 확인
+case "$COMMAND" in
    "start"|"stop"|"restart"|"status"|"logs")
        # 유효한 명령어 - 아래에서 처리
        ;;
@@ -247,7 +310,7 @@ case "$COMMAND" in
        stop_server
        ;;
    "restart")
-       restart_server
+       restart_server "${RESTART_OPTIONS[@]}"
        ;;
    "status")
        show_status
