@@ -17,7 +17,7 @@ BACKUP_FILENAME="world-backup-$(date +%Y%m%d_%H%M).tar.gz"
 BACKUP_PATH="$BACKUP_DIR/$BACKUP_FILENAME"
 
 # 보관할 백업 개수
-KEEP_BACKUPS=2
+KEEP_BACKUPS=10
 
 # 서버 관련 설정
 DOCKER_COMPOSE_DIR="$MINECRAFT_HOME"
@@ -94,7 +94,7 @@ if check_server_status; then
     server_command "save-all flush"
 
     # 저장 완료 대기
-    sleep 3
+    sleep 15
     log "World save completed, starting backup..."
 else
     log "Minecraft server is not running - proceeding with backup"
@@ -107,7 +107,7 @@ start_time=$(date +%s)
 # tar를 사용하여 압축 백업 생성
 backup_source_dir=$(dirname "$WORLD_DIR")
 backup_source_name=$(basename "$WORLD_DIR")
-if tar -czf "$BACKUP_PATH" -C "$backup_source_dir" "$backup_source_name"; then
+if nice -n 19 ionice -c3 tar -czvf "$BACKUP_PATH" -C "$backup_source_dir" "$backup_source_name" 2>&1 | tee -a "$LOG_FILE"; then
    # 백업 파일 권한을 소유자만 읽기/쓰기로 제한
    chmod 600 "$BACKUP_PATH"
 
